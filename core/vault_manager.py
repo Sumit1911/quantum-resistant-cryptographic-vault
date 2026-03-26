@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from core import auth, crypto, storage
 
 
@@ -98,3 +100,72 @@ def delete_file(session: dict, item_id: int) -> bool:
 def list_files(session: dict) -> list:
     """List metadata-only file entries for authenticated user."""
     return storage.list_vault_items(session["db_conn"], session["user_id"])
+
+
+def change_master_password(session: dict, old_password: str, new_password: str) -> bool:
+    """Re-wrap stored private keys using a new master password."""
+    conn = session["db_conn"]
+    user_id = session["user_id"]
+
+    row = conn.execute(
+        """
+        SELECT password_hash,
+               kyber_private_key, kyber_private_key_iv,
+               dilithium_private_key, dilithium_private_key_iv,
+               kdf_salt
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,),
+    ).fetchone()
+    if row is None:
+        return False
+
+    (
+        password_hash,
+        kyber_sk_wrapped,
+        kyber_iv,
+        dil_sk_wrapped,
+        dil_iv,
+        old_salt,
+    ) = row
+
+    if not auth.verify_master_password(old_password, password_hash):
+        return False
+
+    old_key = auth.derive_protection_key(old_password, old_salt)
+    try:
+        kyber_sk = auth.unwrap_private_key(kyber_sk_wrapped, kyber_iv, old_key)
+        dil_sk = auth.unwrap_private_key(dil_sk_wrapped, dil_iv, old_key)
+    except Exception:
+        return False
+
+    new_hash = auth.hash_master_password(new_password)
+    new_salt = os.urandom(auth.KEY_DERIVATION_SALT_SIZE)
+    new_key = auth.derive_protection_key(new_password, new_salt)
+    new_kyber_iv, new_kyber_wrapped = auth.wrap_private_key(kyber_sk, new_key)
+    new_dil_iv, new_dil_wrapped = auth.wrap_private_key(dil_sk, new_key)
+
+    conn.execute(
+        """
+        UPDATE users
+        SET password_hash = ?,
+            kdf_salt = ?,
+            kyber_private_key = ?,
+            kyber_private_key_iv = ?,
+            dilithium_private_key = ?,
+            dilithium_private_key_iv = ?
+        WHERE id = ?
+        """,
+        (
+            new_hash,
+            new_salt,
+            new_kyber_wrapped,
+            new_kyber_iv,
+            new_dil_wrapped,
+            new_dil_iv,
+            user_id,
+        ),
+    )
+    conn.commit()
+    return True

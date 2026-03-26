@@ -151,6 +151,12 @@ Build the Streamlit interface, wired to vault_manager.py.
 - Display user-friendly error on wrong password
 - Never show raw exception tracebacks in the UI
 
+**Current UI polish additions (implemented)**
+- Applied a custom Streamlit theme and hero sections for Login, Vault, and Settings pages
+- Added vault metrics row (item count + total size)
+- Added delete confirmation interaction in vault item actions
+- Improved action button hierarchy and visual labeling for upload/download/delete flows
+
 **Exit criterion:** Manual end-to-end walkthrough: register → login → upload file → logout → login → download file → bytes match → logout.
 
 ---

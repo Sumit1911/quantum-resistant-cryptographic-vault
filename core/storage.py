@@ -24,7 +24,9 @@ class VaultItem:
 
 def get_connection(db_path: str = "vault.db") -> sqlite3.Connection:
     """Return a configured SQLite connection with WAL and FK support."""
-    conn = sqlite3.connect(db_path)
+    # Streamlit can execute callbacks/reruns across threads; disable thread affinity
+    # so the same connection can be reused safely by the app session.
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA journal_mode = WAL;")
