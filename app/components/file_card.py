@@ -25,34 +25,42 @@ def render_file_card(item: dict) -> tuple[bool, bool]:
     """Render a file card and return (download_clicked, delete_clicked)."""
     data = _to_dict(item)
 
-    with st.container(border=True):
-        c1, c2 = st.columns([4, 1])
-        with c1:
-            st.markdown(f"**📄 {data.get('item_name') or 'Unnamed'}**")
-            st.caption(
-                f"{data.get('mime_type') or 'application/octet-stream'} · "
-                f"{data.get('original_size') or 0} bytes"
-            )
-        with c2:
-            st.markdown(
-                f"<span class='vault-chip'>#{data.get('id')}</span>",
-                unsafe_allow_html=True,
-            )
+    size_kb = round((data.get("original_size") or 0) / 1024, 2)
+    icon = "📄" if (data.get("item_type") or "file") == "file" else "🔑"
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            download_clicked = st.button(
-                "⬇ Download",
-                key=f"download_{data.get('id')}",
-                use_container_width=True,
-                type="primary",
-            )
-        with col2:
-            delete_clicked = st.button(
-                "🗑 Delete",
-                key=f"delete_{data.get('id')}",
-                use_container_width=True,
-                type="secondary",
-            )
+    st.markdown(
+        f"""
+        <div class="vault-card" style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <span style="font-family:monospace; font-size:14px; color:#E2E2F0;">
+                    {icon} &nbsp; {data.get('item_name') or 'Unnamed'}
+                </span>
+                <br>
+                <span style="font-family:monospace; font-size:11px; color:#5A5A80;">
+                    {size_kb} KB &nbsp;·&nbsp; {data.get('mime_type') or 'application/octet-stream'} &nbsp;·&nbsp;
+                </span>
+                <span class="vault-chip">KYBER-512</span>
+            </div>
+            <div><span class="vault-chip">#{data.get('id')}</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        download_clicked = st.button(
+            "⬇ Download",
+            key=f"download_{data.get('id')}",
+            use_container_width=True,
+            type="primary",
+        )
+    with col2:
+        delete_clicked = st.button(
+            "🗑 Delete",
+            key=f"delete_{data.get('id')}",
+            use_container_width=True,
+            type="secondary",
+        )
 
     return download_clicked, delete_clicked

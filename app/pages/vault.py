@@ -46,7 +46,16 @@ def render_vault_page(session: dict) -> None:
             else:
                 render_status(f"Stored file successfully (item #{item_id}).", "success")
 
-    st.markdown("#### 📚 Stored items")
+    st.markdown(
+        """
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
+            <span style="font-family:monospace; font-size:13px; color:#5A5A80;
+                         letter-spacing:0.08em; text-transform:uppercase;">Vault contents</span>
+            <div style="flex:1; height:1px; background:#1E1E30;"></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     items = vault_manager.list_files(session)
     total_size = sum((item.original_size or 0) for item in items)
     render_metric_row(len(items), total_size)

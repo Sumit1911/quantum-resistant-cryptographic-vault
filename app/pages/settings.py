@@ -28,13 +28,16 @@ def render_settings_page(session: dict) -> None:
         unsafe_allow_html=True,
     )
 
-    with st.container(border=True):
+    st.markdown('<div class="vault-card">', unsafe_allow_html=True)
+    with st.container():
         st.subheader("Public Key Fingerprints")
         st.caption("Use these fingerprints for external verification/audits.")
         st.code(f"Kyber public key SHA-256: {_fingerprint(session['kyber_pk'])}")
         st.code(f"Dilithium public key SHA-256: {_fingerprint(session['dilithium_pk'])}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    with st.container(border=True):
+    st.markdown('<div class="vault-card">', unsafe_allow_html=True)
+    with st.container():
         st.subheader("Change Master Password")
         st.caption("This re-wraps private keys with a key derived from your new password.")
         with st.form("change_password_form", clear_on_submit=True):
@@ -42,6 +45,7 @@ def render_settings_page(session: dict) -> None:
             new_password = st.text_input("New Master Password", type="password")
             confirm_new_password = st.text_input("Confirm New Master Password", type="password")
             submitted = st.form_submit_button("Update Password", use_container_width=True, type="primary")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if submitted:
         if not old_password or not new_password:

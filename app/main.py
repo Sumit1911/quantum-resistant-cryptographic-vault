@@ -66,9 +66,23 @@ def main() -> None:
         st.session_state["authenticated"] = False
         st.rerun()
 
-    st.sidebar.markdown("## 🔐 Quantum Vault")
-    st.sidebar.caption("Post-quantum secure personal vault")
-    st.sidebar.markdown("<span class='vault-chip'>ML-KEM</span><span class='vault-chip'>ML-DSA</span><span class='vault-chip'>AES-256-GCM</span>", unsafe_allow_html=True)
+    st.sidebar.markdown(
+        """
+        <div style="padding: 20px 0 24px; border-bottom: 1px solid #1E1E30; margin-bottom:16px;">
+            <span style="font-family:monospace; font-size:15px; font-weight:700;
+                         color:#6C63FF; letter-spacing:0.1em;">⬡ QVAULT</span>
+            <span style="display:block; font-size:10px; color:#3A3A55;
+                         font-family:monospace; margin-top:2px; letter-spacing:0.06em;">
+                v1.0 · PQC ENABLED
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown(
+        "<span class='vault-chip'>KYBER-512</span><span class='vault-chip'>DILITHIUM</span><span class='vault-chip'>AES-256-GCM</span>",
+        unsafe_allow_html=True,
+    )
     st.sidebar.divider()
     page = st.sidebar.radio("Navigate", ["Vault", "Settings"], index=0)
     if st.sidebar.button("Logout", use_container_width=True):
