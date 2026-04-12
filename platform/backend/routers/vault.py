@@ -15,5 +15,8 @@ class VaultEncryptRequest(BaseModel):
 
 @router.post("/encrypt")
 def encrypt(payload: VaultEncryptRequest) -> dict:
-    return build_vault_metrics(payload.plaintext.encode("utf-8"))
-
+    return build_vault_metrics(
+        payload.plaintext.encode("utf-8"),
+        algorithm=payload.algorithm,
+        signing=payload.signing,
+    )

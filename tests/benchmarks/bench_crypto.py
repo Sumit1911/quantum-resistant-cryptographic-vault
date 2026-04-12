@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 import statistics
+import sys
 import time
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from core import auth, crypto, storage, vault_manager
 
@@ -18,6 +25,8 @@ def _timeit(fn, rounds: int = 200):
 
 
 def main() -> None:
+    run_id = int(time.time() * 1_000_000)
+
     kyber_pk, kyber_sk = crypto.generate_kyber_keypair()
     dil_pk, dil_sk = crypto.generate_dilithium_keypair()
     payload_1k = b"a" * 1024
@@ -37,11 +46,12 @@ def main() -> None:
     aes_1mb_ms = _timeit(_aes_enc_1mb, rounds=50)
     aes_mbps = (1.0 / (aes_1mb_ms / 1000.0))
 
-    db_path = "/tmp/bench_vault.db"
+    db_path = f"/tmp/bench_vault_{run_id}.db"
     storage.init_db(db_path)
     conn = storage.get_connection(db_path)
-    vault_manager.register("bench", "pass123", conn)
-    session = vault_manager.login("bench", "pass123", conn)
+    username = f"bench_{run_id}"
+    vault_manager.register(username, "pass123", conn)
+    session = vault_manager.login(username, "pass123", conn)
     assert session is not None
 
     store_ms = _timeit(
