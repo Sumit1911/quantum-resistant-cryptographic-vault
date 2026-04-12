@@ -9,13 +9,26 @@ from __future__ import annotations
 
 import os
 import struct
+import sys
+from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+# Ensure subprocess tools installed in the active Python environment (for example
+# cmake from .venv/Scripts) are discoverable by liboqs-python installer.
+_py_bin_dir = str(Path(sys.executable).resolve().parent)
+if _py_bin_dir not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = _py_bin_dir + os.pathsep + os.environ.get("PATH", "")
+
+
+OQS_IMPORT_ERROR: str | None = None
 try:
     import oqs
-except ModuleNotFoundError:  # pragma: no cover - covered by runtime guard tests/environments
+except BaseException as exc:  # pragma: no cover - environment-specific import/load failures
+    # liboqs-python can raise non-ModuleNotFoundError failures during import when
+    # native liboqs binaries are unavailable or mismatched on the host.
     oqs = None  # type: ignore[assignment]
+    OQS_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 
 KYBER_ALG = "Kyber512"
@@ -29,8 +42,10 @@ GCM_TAG_SIZE = 16
 def _require_oqs() -> None:
     """Ensure liboqs-python is available before PQC operations."""
     if oqs is None:
+        detail = f" ({OQS_IMPORT_ERROR})" if OQS_IMPORT_ERROR else ""
         raise RuntimeError(
-            "liboqs-python is not installed. Install Phase 0 dependencies first."
+            "liboqs-python is unavailable. Install/fix native liboqs + liboqs-python dependencies first."
+            f"{detail}"
         )
 
 
@@ -59,6 +74,7 @@ def generate_kyber_keypair() -> tuple[bytes, bytes]:
 
 def generate_dilithium_keypair() -> tuple[bytes, bytes]:
     """Generate and return a Dilithium keypair as (public_key, private_key)."""
+    _require_oqs()
     dilithium_alg = _resolve_dilithium_alg()
 
     with oqs.Signature(dilithium_alg) as signer:
@@ -122,6 +138,7 @@ def aes_decrypt(ciphertext: bytes, iv: bytes, tag: bytes, session_key: bytes) ->
 
 def dilithium_sign(payload: bytes, dilithium_private_key: bytes) -> bytes:
     """Sign payload with Dilithium private key and return signature bytes."""
+    _require_oqs()
     dilithium_alg = _resolve_dilithium_alg()
 
     with oqs.Signature(dilithium_alg, secret_key=dilithium_private_key) as signer:
@@ -132,6 +149,7 @@ def dilithium_verify(
     payload: bytes, signature: bytes, dilithium_public_key: bytes
 ) -> bool:
     """Verify Dilithium signature for payload and public key."""
+    _require_oqs()
     dilithium_alg = _resolve_dilithium_alg()
 
     with oqs.Signature(dilithium_alg) as verifier:

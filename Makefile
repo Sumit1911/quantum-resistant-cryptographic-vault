@@ -1,10 +1,17 @@
-PYTHON ?= python3
+ifeq ($(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe)
+PYTHON := .venv/Scripts/python.exe
+else ifeq ($(wildcard .venv/bin/python),.venv/bin/python)
+PYTHON := .venv/bin/python
+else
+$(error Local virtualenv Python not found. Create .venv and install dependencies first)
+endif
 
-.PHONY: help setup-db test test-all benchmark keygen run-streamlit run-backend run-frontend run-platform build-frontend
+.PHONY: help setup-db test test-all benchmark keygen run-streamlit run-streamlist run-backend run-frontend run-platform build-frontend
 
 help:
 	@echo "Targets:"
 	@echo "  make run-streamlit   # Legacy Streamlit app"
+	@echo "  make run-streamlist  # Alias for run-streamlit (common typo)"
 	@echo "  make run-backend     # Platform FastAPI backend"
 	@echo "  make run-frontend    # Platform React frontend"
 	@echo "  make run-platform    # Backend + frontend together"
@@ -19,7 +26,7 @@ setup-db:
 	$(PYTHON) scripts/setup_db.py
 
 test:
-	pytest -q
+	$(PYTHON) -m pytest -q
 
 test-all:
 	$(PYTHON) -m pytest -q tests/unit tests/integration tests/security -v
@@ -32,6 +39,9 @@ keygen:
 
 run-streamlit:
 	$(PYTHON) scripts/run_project.py streamlit
+
+run-streamlist:
+	$(MAKE) run-streamlit
 
 run-backend:
 	$(PYTHON) scripts/run_project.py backend
