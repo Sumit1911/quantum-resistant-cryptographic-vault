@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 import streamlit as st
 
 from components.status_bar import render_status
@@ -67,8 +69,12 @@ def render_login_page(db_conn) -> None:
             else:
                 try:
                     vault_manager.register(username.strip(), password, db_conn)
-                except Exception:
-                    render_status("Unable to register. Username may already exist.", "error")
+                except sqlite3.IntegrityError:
+                    render_status("Username already exists. Please choose a different username.", "error")
+                except RuntimeError as exc:
+                    render_status(f"Registration failed: {exc}", "error")
+                except Exception as exc:
+                    render_status(f"Registration failed due to an unexpected error: {exc}", "error")
                 else:
                     render_status("Registration successful. Please login.", "success")
 

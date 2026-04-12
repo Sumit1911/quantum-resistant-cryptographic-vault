@@ -75,7 +75,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.target == "streamlit":
-        return _run_blocking(["streamlit", "run", "app/main.py"], ROOT)
+        return _run_blocking([sys.executable, "-m", "streamlit", "run", "app/main.py"], ROOT)
     if args.target == "backend":
         return _run_blocking(
             [sys.executable, "-m", "uvicorn", "main:app", "--reload", "--host", "127.0.0.1", "--port", "8000"],

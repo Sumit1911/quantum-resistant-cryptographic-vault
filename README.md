@@ -60,3 +60,85 @@ python3 scripts/run_project.py streamlit
 - Platform frontend deps: `cd platform/frontend && npm install`
 
 If `liboqs` is not available, install native `liboqs` first, then `liboqs-python`.
+
+## Streamlit PQC Setup (Windows + macOS)
+
+The Streamlit vault (`make run-streamlit`) uses real PQC algorithms from `liboqs`:
+- KEM: Kyber-512
+- Signature: Dilithium / ML-DSA
+
+### Windows
+
+1. Create/activate local virtual environment and install Python deps:
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install "git+https://github.com/open-quantum-safe/liboqs-python.git@v0.14"
+```
+
+2. Install Visual Studio Build Tools with C++ workload/components:
+- Desktop development with C++
+- MSVC v143 x64/x86
+- Windows SDK
+- C++ CMake tools for Windows
+
+3. Build and install native `liboqs`:
+```powershell
+git clone --depth 1 --branch 0.14.0 https://github.com/open-quantum-safe/liboqs.git C:\Users\Admin\_oqs-src\liboqs
+cmake -S C:\Users\Admin\_oqs-src\liboqs -B C:\Users\Admin\_oqs-src\liboqs\build -DBUILD_SHARED_LIBS=ON -DOQS_BUILD_ONLY_LIB=ON -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=TRUE -DCMAKE_INSTALL_PREFIX=C:\Users\Admin\_oqs
+cmake --build C:\Users\Admin\_oqs-src\liboqs\build --config Release --target install
+setx OQS_INSTALL_PATH C:\Users\Admin\_oqs
+```
+
+4. Open a new terminal after `setx`, then run Streamlit:
+```powershell
+make run-streamlit
+```
+
+### macOS
+
+1. Install build prerequisites:
+```bash
+xcode-select --install
+brew install cmake
+```
+
+2. Create/activate local virtual environment and install Python deps:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install "git+https://github.com/open-quantum-safe/liboqs-python.git@v0.14"
+```
+
+3. Build and install native `liboqs`:
+```bash
+git clone --depth 1 --branch 0.14.0 https://github.com/open-quantum-safe/liboqs.git "$HOME/_oqs-src/liboqs"
+cmake -S "$HOME/_oqs-src/liboqs" -B "$HOME/_oqs-src/liboqs/build" -DBUILD_SHARED_LIBS=ON -DOQS_BUILD_ONLY_LIB=ON -DCMAKE_INSTALL_PREFIX="$HOME/_oqs"
+cmake --build "$HOME/_oqs-src/liboqs/build" --parallel
+cmake --install "$HOME/_oqs-src/liboqs/build"
+echo 'export OQS_INSTALL_PATH="$HOME/_oqs"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+4. Run Streamlit:
+```bash
+make run-streamlit
+```
+
+### Verify PQC Is Active
+
+Run from project root:
+```bash
+.venv/Scripts/python.exe -c "import oqs; print(oqs.oqs_version()); print('Kyber512' in oqs.get_enabled_kem_mechanisms()); print(any(x in oqs.get_enabled_sig_mechanisms() for x in ['Dilithium3','ML-DSA-65']))"
+```
+
+On macOS/Linux use:
+```bash
+.venv/bin/python -c "import oqs; print(oqs.oqs_version()); print('Kyber512' in oqs.get_enabled_kem_mechanisms()); print(any(x in oqs.get_enabled_sig_mechanisms() for x in ['Dilithium3','ML-DSA-65']))"
+```
+
+Expected output includes:
+- `True` for `Kyber512`
+- `True` for Dilithium/ML-DSA support
