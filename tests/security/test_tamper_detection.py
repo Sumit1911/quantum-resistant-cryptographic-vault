@@ -47,3 +47,22 @@ def test_item_name_tamper_raises_integrity_error(tmp_path) -> None:
 
     with pytest.raises(vault_manager.IntegrityError):
         vault_manager.retrieve_file(session, item_id)
+
+
+def test_corrupted_aes_tag_fails_closed(tmp_path) -> None:
+    conn = _setup_db(tmp_path)
+    assert vault_manager.register("eve", "pass123", conn)
+    session = vault_manager.login("eve", "pass123", conn)
+    assert session is not None
+
+    item_id = vault_manager.store_file(session, "tag.txt", b"payload", "text/plain")
+
+    row = conn.execute("SELECT aes_tag FROM vault_items WHERE id = ?", (item_id,)).fetchone()
+    assert row is not None
+    tampered_tag = bytearray(row[0])
+    tampered_tag[0] ^= 0x01
+    conn.execute("UPDATE vault_items SET aes_tag = ? WHERE id = ?", (bytes(tampered_tag), item_id))
+    conn.commit()
+
+    with pytest.raises(vault_manager.IntegrityError):
+        vault_manager.retrieve_file(session, item_id)

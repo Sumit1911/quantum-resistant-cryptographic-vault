@@ -116,3 +116,26 @@ def test_register_duplicate_username_raises_integrity_error(monkeypatch: pytest.
 
     with pytest.raises(sqlite3.IntegrityError):
         auth.register_user("charlie", "another-password", conn)
+
+
+def test_login_returns_none_on_private_key_unwrap_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    conn = _init_in_memory_db()
+
+    monkeypatch.setattr(auth.crypto, "generate_kyber_keypair", lambda: (b"K" * 800, b"k" * 1632))
+    monkeypatch.setattr(auth.crypto, "generate_dilithium_keypair", lambda: (b"D" * 32, b"d" * 64))
+    assert auth.register_user("delta", "pass123", conn) is True
+
+    row = conn.execute(
+        "SELECT kyber_private_key FROM users WHERE username = ?",
+        ("delta",),
+    ).fetchone()
+    assert row is not None
+    tampered = bytearray(row[0])
+    tampered[0] ^= 0x01
+    conn.execute(
+        "UPDATE users SET kyber_private_key = ? WHERE username = ?",
+        (bytes(tampered), "delta"),
+    )
+    conn.commit()
+
+    assert auth.login_user("delta", "pass123", conn) is None

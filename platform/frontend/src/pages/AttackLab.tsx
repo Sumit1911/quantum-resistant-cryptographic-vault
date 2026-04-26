@@ -47,6 +47,19 @@ export default function AttackLab() {
     <section className="page-grid">
       <article className="panel">
         <div className="panel-head">
+          <h3>Threat Model Scope</h3>
+          <p>These outputs are model-driven research views, not direct break-time forecasts.</p>
+        </div>
+        <ul className="notes-list">
+          <li>Shor mode: modeled asymptotic exposure pressure for RSA/ECC-like systems.</li>
+          <li>Grover mode: modeled search-space reduction for symmetric/hash targets.</li>
+          <li>Lattice mode: modeled hardness trend for PQC-style lattice assumptions.</li>
+          <li>HNDL mode: relative long-horizon exposure planning model.</li>
+        </ul>
+      </article>
+
+      <article className="panel">
+        <div className="panel-head">
           <h2>Attack Lab</h2>
           <p>Simulate practical quantum pressure against deployed cryptosystems</p>
         </div>
@@ -129,14 +142,14 @@ export default function AttackLab() {
             <MetricCard label="Mode" value={String(data.mode).toUpperCase()} hint="Current simulation family" />
             <MetricCard
               label="Verdict"
-              value={String(data.verdict).toUpperCase()}
+              value={String(data.verdict).replaceAll('_', ' ').toUpperCase()}
               hint={data.mode === 'grovers' ? data.recommendation : data.explanation || data.summary}
-              tone={data.verdict === 'BROKEN' || data.verdict === 'WEAKENED' ? 'warn' : 'good'}
+              tone={String(data.verdict).includes('exposed') || String(data.verdict).includes('weakened') || String(data.verdict).includes('advised') ? 'warn' : 'good'}
             />
             {data.mode === 'shors' && (
               <MetricCard
-                label="Break Ratio"
-                value={`${Number(data.break_ratio).toExponential(2)}`}
+                label="Break Ratio (model)"
+                value={`${Number(data.break_ratio_model).toExponential(2)}`}
                 hint={`${data.snapshot.classical_notation} vs ${data.snapshot.quantum_notation}`}
                 tone="warn"
               />
@@ -150,9 +163,9 @@ export default function AttackLab() {
             )}
             {data.mode === 'lattice' && (
               <MetricCard
-                label="Security Level"
-                value={`${data.security_level} bits`}
-                hint={`BKZ block size ${data.bkz_block_size}`}
+                label="Security Band (model)"
+                value={`${data.security_band_model} bits`}
+                hint={`BKZ proxy ${data.bkz_block_size_proxy}`}
                 tone="good"
               />
             )}
@@ -191,13 +204,13 @@ export default function AttackLab() {
               <article className="panel">
                 <div className="panel-head">
                   <h3>Harvest-Now Assessment</h3>
-                  <p>Long-term confidentiality exposure estimate</p>
+                  <p>Relative long-term confidentiality exposure model</p>
                 </div>
                 <div className="bars-grid">
                   <div className="bar-item">
-                    <p>Compromise Estimate</p>
+                    <p>Threshold Crossing Year (model)</p>
                     <strong>
-                      {data.compromise_year_estimate ? `Year ${data.compromise_year_estimate}` : 'No trigger'}
+                      {data.threshold_crossing_year_model ? `Year ${data.threshold_crossing_year_model}` : 'No trigger'}
                     </strong>
                   </div>
                   <div className="bar-item">
@@ -208,6 +221,32 @@ export default function AttackLab() {
               </article>
             </>
           )}
+
+          <article className="panel">
+            <div className="panel-head">
+              <h3>How This Is Computed</h3>
+              <p>Formula transparency and model boundaries</p>
+            </div>
+            {data.formula_panel ? (
+              <ul className="notes-list">
+                {data.formula_panel.input && <li>Input: {data.formula_panel.input}</li>}
+                {data.formula_panel.classical_formula_family && (
+                  <li>Classical formula family: {data.formula_panel.classical_formula_family}</li>
+                )}
+                {data.formula_panel.quantum_formula_family && (
+                  <li>Quantum formula family: {data.formula_panel.quantum_formula_family}</li>
+                )}
+                {data.formula_panel.formula_family && <li>Formula family: {data.formula_panel.formula_family}</li>}
+                {data.formula_panel.output_meaning && <li>Output meaning: {data.formula_panel.output_meaning}</li>}
+                {data.formula_panel.estimated_vs_measured && (
+                  <li>Estimated vs measured: {data.formula_panel.estimated_vs_measured}</li>
+                )}
+                {data.formula_panel.curve_source && <li>Curve source: {data.formula_panel.curve_source}</li>}
+              </ul>
+            ) : (
+              <p className="metric-hint">No formula panel available for this mode.</p>
+            )}
+          </article>
         </>
       )}
     </section>

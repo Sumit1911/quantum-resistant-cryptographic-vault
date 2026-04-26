@@ -157,18 +157,25 @@ def dilithium_verify(
 
 
 def build_signing_payload(
-    ciphertext: bytes, capsule: bytes, item_name: str, user_id: int
+    ciphertext: bytes,
+    capsule: bytes,
+    item_name: str,
+    user_id: int,
+    metadata_nonce: bytes = b"",
 ) -> bytes:
     """Build a deterministic signed payload with explicit length prefixes."""
     name_bytes = item_name.encode("utf-8")
 
     # Layout:
-    # [user_id:u64][name_len:u32][name][cipher_len:u32][cipher][capsule_len:u32][capsule]
+    # [user_id:u64][name_len:u32][name][nonce_len:u32][nonce]
+    # [cipher_len:u32][cipher][capsule_len:u32][capsule]
     return b"".join(
         (
             struct.pack(">Q", user_id),
             struct.pack(">I", len(name_bytes)),
             name_bytes,
+            struct.pack(">I", len(metadata_nonce)),
+            metadata_nonce,
             struct.pack(">I", len(ciphertext)),
             ciphertext,
             struct.pack(">I", len(capsule)),

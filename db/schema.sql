@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS vault_items (
     user_id     INTEGER NOT NULL REFERENCES users(id),
     item_name   TEXT    NOT NULL,
     item_type   TEXT    NOT NULL,
+    metadata_nonce BLOB NOT NULL,
     ciphertext  BLOB    NOT NULL,
     aes_iv      BLOB    NOT NULL,
     aes_tag     BLOB    NOT NULL,

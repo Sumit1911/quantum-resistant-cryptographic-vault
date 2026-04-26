@@ -1,216 +1,360 @@
 from __future__ import annotations
 
-import math
+import os
+import platform
 import random
 import statistics
+import sys
+import time
+from dataclasses import dataclass
 
-CLASSICAL_PROFILES = {
-    "RSA-2048": {
-        "base_ms": 122.0,
-        "key_size_bytes": 294,
-        "output_size_bytes": 256,
-        "security_bits_classical": 112,
-        "security_bits_quantum": 0,
-        "energy_mj": 8.4,
-        "memory_kb": 512,
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, x25519
+
+from core import crypto
+
+EXPERIMENT_FAMILIES = {
+    "kem": {
+        "operation": "key_exchange",
+        "classical_algos": ["X25519"],
+        "pqc_algos": ["Kyber-512", "Kyber-768"],
+        "default_payload_mb": None,
     },
-    "RSA-4096": {
-        "base_ms": 311.0,
-        "key_size_bytes": 550,
-        "output_size_bytes": 512,
-        "security_bits_classical": 128,
-        "security_bits_quantum": 0,
-        "energy_mj": 21.9,
-        "memory_kb": 900,
+    "signature": {
+        "operation": "sign_verify",
+        "classical_algos": ["ECDSA"],
+        "pqc_algos": ["Dilithium3", "ML-DSA-65"],
+        "default_payload_mb": None,
     },
-    "ECDSA": {
-        "base_ms": 18.5,
-        "key_size_bytes": 91,
-        "output_size_bytes": 72,
-        "security_bits_classical": 128,
-        "security_bits_quantum": 0,
-        "energy_mj": 1.4,
-        "memory_kb": 128,
-    },
-    "X25519": {
-        "base_ms": 5.8,
-        "key_size_bytes": 32,
-        "output_size_bytes": 32,
-        "security_bits_classical": 128,
-        "security_bits_quantum": 0,
-        "energy_mj": 0.8,
-        "memory_kb": 96,
+    "encryption": {
+        "operation": "hybrid_encrypt",
+        "classical_algos": ["RSA-OAEP-AES"],
+        "pqc_algos": ["Kyber-AES-Hybrid"],
+        "default_payload_mb": 1,
     },
 }
 
-PQC_PROFILES = {
-    "Kyber-512": {
-        "base_ms": 0.11,
-        "key_size_bytes": 800,
-        "output_size_bytes": 768,
-        "security_bits_classical": 178,
-        "security_bits_quantum": 128,
-        "energy_mj": 0.2,
-        "memory_kb": 164,
-    },
-    "Kyber-768": {
-        "base_ms": 0.15,
-        "key_size_bytes": 1184,
-        "output_size_bytes": 1088,
-        "security_bits_classical": 192,
-        "security_bits_quantum": 192,
-        "energy_mj": 0.25,
-        "memory_kb": 214,
-    },
-    "Dilithium2": {
-        "base_ms": 0.95,
-        "key_size_bytes": 1312,
-        "output_size_bytes": 2420,
-        "security_bits_classical": 128,
-        "security_bits_quantum": 128,
-        "energy_mj": 0.7,
-        "memory_kb": 480,
-    },
-    "Dilithium3": {
-        "base_ms": 1.4,
-        "key_size_bytes": 1952,
-        "output_size_bytes": 3293,
-        "security_bits_classical": 192,
-        "security_bits_quantum": 192,
-        "energy_mj": 0.92,
-        "memory_kb": 612,
-    },
-}
-
-OPERATION_FACTORS = {
-    "keygen": 1.2,
-    "encrypt": 0.8,
-    "sign": 1.4,
-    "verify": 0.9,
+RISK_SCORES = {
+    "X25519": 80,
+    "ECDSA": 85,
+    "RSA-OAEP-AES": 95,
+    "Kyber-512": 20,
+    "Kyber-768": 10,
+    "Dilithium3": 10,
+    "ML-DSA-65": 10,
+    "Kyber-AES-Hybrid": 12,
 }
 
 
-def _quantum_risk_score(security_bits_quantum: int) -> int:
-    return max(0, min(100, 100 - int((security_bits_quantum / 192.0) * 100)))
+@dataclass
+class Sample:
+    latency_ms: float
+    ciphertext_overhead_bytes: int
+    capsule_signature_overhead_bytes: int
 
 
-def _generate_series(base_ms: float, iterations: int, variability: float, rng: random.Random) -> list[float]:
-    series: list[float] = []
-    for idx in range(iterations):
-        thermal_drift = 1.0 + ((idx / max(1, iterations - 1)) * 0.05)
-        jitter = 1.0 + rng.uniform(-variability, variability)
-        sample = base_ms * thermal_drift * jitter
-        series.append(round(max(sample, 0.001), 4))
-    return series
+def _p95(values: list[float]) -> float:
+    ordered = sorted(values)
+    idx = max(0, int(len(ordered) * 0.95) - 1)
+    return ordered[idx]
 
 
-def _profile_result(algo: str, profile: dict, operation: str, file_size_mb: int, iterations: int, rng: random.Random) -> dict:
-    operation_factor = OPERATION_FACTORS.get(operation, 1.0)
-    file_factor = 1.0 + (max(file_size_mb, 1) - 1) * 0.08
-    effective_base = profile["base_ms"] * operation_factor * file_factor
+def _measure(op, warmup_runs: int, iterations: int) -> list[Sample]:
+    # Warm-up runs are intentionally excluded from measured output.
+    for _ in range(warmup_runs):
+        op()
 
-    timeseries = _generate_series(effective_base, iterations, variability=0.06, rng=rng)
-    avg_ms = statistics.mean(timeseries)
-    stddev_ms = statistics.pstdev(timeseries) if len(timeseries) > 1 else 0.0
-    p95_ms = timeseries[max(0, math.ceil(0.95 * len(timeseries)) - 1)]
+    samples: list[Sample] = []
+    for _ in range(iterations):
+        start = time.perf_counter()
+        result = op()  # ONLY crypto operation block measured
+        end = time.perf_counter()
+        samples.append(
+            Sample(
+                latency_ms=(end - start) * 1000.0,
+                ciphertext_overhead_bytes=result["ciphertext_overhead_bytes"],
+                capsule_signature_overhead_bytes=result["capsule_signature_overhead_bytes"],
+            )
+        )
+    return samples
 
-    throughput_mbps = 0.0
-    if avg_ms > 0:
-        throughput_mbps = (file_size_mb * 1000.0) / avg_ms
+
+def _validate_experiment_config(family: str, classical_algo: str, pqc_algo: str, operation: str) -> None:
+    rules = EXPERIMENT_FAMILIES.get(family)
+    if rules is None:
+        raise ValueError(f"Unsupported experiment_family '{family}'")
+    if operation != rules["operation"]:
+        raise ValueError(
+            f"Invalid operation '{operation}' for family '{family}'. Expected '{rules['operation']}'."
+        )
+    if classical_algo not in rules["classical_algos"]:
+        raise ValueError(
+            f"Invalid classical algorithm '{classical_algo}' for family '{family}'. "
+            f"Allowed: {', '.join(rules['classical_algos'])}"
+        )
+    if pqc_algo not in rules["pqc_algos"]:
+        raise ValueError(
+            f"Invalid PQC algorithm '{pqc_algo}' for family '{family}'. "
+            f"Allowed: {', '.join(rules['pqc_algos'])}"
+        )
+
+
+def _build_kem_ops(pqc_algo: str):
+    def classical_op() -> dict:
+        sk_a = x25519.X25519PrivateKey.generate()
+        sk_b = x25519.X25519PrivateKey.generate()
+        pk_b = sk_b.public_key()
+        secret_a = sk_a.exchange(pk_b)
+        if len(secret_a) != 32:
+            raise RuntimeError("X25519 secret size mismatch")
+        return {
+            "ciphertext_overhead_bytes": 0,
+            "capsule_signature_overhead_bytes": 0,
+        }
+
+    def pqc_op() -> dict:
+        if pqc_algo == "Kyber-768":
+            kem_alg = "Kyber768"
+            with crypto.oqs.KeyEncapsulation(kem_alg) as kem:
+                pk = kem.generate_keypair()
+                sk = kem.export_secret_key()
+            with crypto.oqs.KeyEncapsulation(kem_alg) as kem_enc:
+                capsule, ss_enc = kem_enc.encap_secret(pk)
+            with crypto.oqs.KeyEncapsulation(kem_alg, secret_key=sk) as kem_dec:
+                ss_dec = kem_dec.decap_secret(capsule)
+        else:
+            pk, sk = crypto.generate_kyber_keypair()
+            capsule, ss_enc = crypto.kyber_encapsulate(pk)
+            ss_dec = crypto.kyber_decapsulate(capsule, sk)
+        if ss_enc != ss_dec:
+            raise RuntimeError("KEM decapsulation mismatch")
+        return {
+            "ciphertext_overhead_bytes": 0,
+            "capsule_signature_overhead_bytes": len(capsule),
+        }
+
+    return classical_op, pqc_op
+
+
+def _build_signature_ops(pqc_algo: str):
+    payload = b"S" * 1024
+
+    ecdsa_private = ec.generate_private_key(ec.SECP256R1())
+    ecdsa_public = ecdsa_private.public_key()
+
+    if pqc_algo in {"Dilithium3", "ML-DSA-65"}:
+        pqc_public, pqc_private = crypto.generate_dilithium_keypair()
+        pqc_alg = None
+    else:
+        raise ValueError(f"Unsupported PQC signature algorithm '{pqc_algo}' on this backend")
+
+    def classical_op() -> dict:
+        sig = ecdsa_private.sign(payload, ec.ECDSA(hashes.SHA256()))
+        ecdsa_public.verify(sig, payload, ec.ECDSA(hashes.SHA256()))
+        return {
+            "ciphertext_overhead_bytes": 0,
+            "capsule_signature_overhead_bytes": len(sig),
+        }
+
+    def pqc_op() -> dict:
+        if pqc_alg is None:
+            sig = crypto.dilithium_sign(payload, pqc_private)
+            ok = crypto.dilithium_verify(payload, sig, pqc_public)
+        else:
+            with crypto.oqs.Signature(pqc_alg, secret_key=pqc_private) as signer:
+                sig = signer.sign(payload)
+            with crypto.oqs.Signature(pqc_alg) as verifier:
+                ok = verifier.verify(payload, sig, pqc_public)
+        if not ok:
+            raise RuntimeError("PQC signature verify failed")
+        return {
+            "ciphertext_overhead_bytes": 0,
+            "capsule_signature_overhead_bytes": len(sig),
+        }
+
+    return classical_op, pqc_op
+
+
+def _build_encryption_ops(payload_size_mb: int):
+    rng = random.Random(1337 + payload_size_mb)
+    payload = rng.randbytes(payload_size_mb * 1024 * 1024)
+
+    rsa_private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    rsa_public = rsa_private.public_key()
+
+    kyber_public, _ = crypto.generate_kyber_keypair()
+
+    def classical_op() -> dict:
+        # Classical hybrid pipeline (same structure as PQC pipeline):
+        # 1) generate AES key 2) AES-encrypt payload 3) wrap AES key
+        aes_key = os.urandom(crypto.AES_KEY_SIZE)
+        _, ciphertext, tag = crypto.aes_encrypt(payload, aes_key)
+        wrapped_key = rsa_public.encrypt(
+            aes_key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+        return {
+            "ciphertext_overhead_bytes": (len(ciphertext) - len(payload)) + len(tag),
+            "capsule_signature_overhead_bytes": len(wrapped_key),
+        }
+
+    def pqc_op() -> dict:
+        # PQC hybrid pipeline (structurally identical):
+        # 1) generate AES key 2) AES-encrypt payload 3) wrap AES key
+        aes_key = os.urandom(crypto.AES_KEY_SIZE)
+        _, ciphertext, tag = crypto.aes_encrypt(payload, aes_key)
+
+        # KEM shared secret wraps AES key via AEAD; capsule carries unwrap context.
+        capsule, wrap_key = crypto.kyber_encapsulate(kyber_public)
+        wrap_iv, wrapped_aes_key, wrapped_tag = crypto.aes_encrypt(aes_key, wrap_key)
+
+        return {
+            "ciphertext_overhead_bytes": (len(ciphertext) - len(payload)) + len(tag),
+            "capsule_signature_overhead_bytes": len(capsule)
+            + len(wrap_iv)
+            + len(wrapped_aes_key)
+            + len(wrapped_tag),
+        }
+
+    return classical_op, pqc_op, payload
+
+
+def _summarize_branch(
+    algo: str,
+    samples: list[Sample],
+    family: str,
+    payload_size_mb: int | None,
+) -> dict:
+    latencies = [s.latency_ms for s in samples]
+    med_ms = statistics.median(latencies)
+    avg_ms = statistics.mean(latencies)
+
+    ops_per_sec = (1000.0 / med_ms) if med_ms > 0 else 0.0
+    if family == "encryption":
+        throughput_value = ((payload_size_mb or 1) / (med_ms / 1000.0)) if med_ms > 0 else 0.0
+        throughput_unit = "MB/s"
+    else:
+        throughput_value = ops_per_sec
+        throughput_unit = "ops/s"
 
     return {
         "algo": algo,
-        "keygen_ms": round(effective_base * 1.1, 4),
-        "operation_ms": round(effective_base * 0.9, 4),
-        "avg_ms": round(avg_ms, 4),
-        "p95_ms": round(p95_ms, 4),
-        "stddev_ms": round(stddev_ms, 4),
-        "ops_per_sec": round(1000.0 / avg_ms, 3) if avg_ms > 0 else 0.0,
-        "throughput_mbps": round(throughput_mbps, 3),
-        "key_size_bytes": profile["key_size_bytes"],
-        "output_size_bytes": profile["output_size_bytes"],
-        "security_bits_classical": profile["security_bits_classical"],
-        "security_bits_quantum": profile["security_bits_quantum"],
-        "quantum_risk_score": _quantum_risk_score(profile["security_bits_quantum"]),
-        "energy_mj": round(profile["energy_mj"] * operation_factor * file_factor, 3),
-        "memory_kb": profile["memory_kb"],
-        "timeseries": timeseries,
+        "median_ms": round(med_ms, 6),
+        "avg_ms": round(avg_ms, 6),
+        "p95_ms": round(_p95(latencies), 6),
+        "stddev_ms": round(statistics.pstdev(latencies) if len(latencies) > 1 else 0.0, 6),
+        "ops_per_sec": round(ops_per_sec, 6),
+        "throughput_value": round(throughput_value, 6),
+        "throughput_unit": throughput_unit,
+        "ciphertext_overhead_bytes": int(
+            statistics.median([s.ciphertext_overhead_bytes for s in samples])
+        ),
+        "capsule_signature_overhead_bytes": int(
+            statistics.median([s.capsule_signature_overhead_bytes for s in samples])
+        ),
+        "quantum_risk_score": RISK_SCORES.get(algo, 50),
+        "timeseries": [round(value, 6) for value in latencies],
     }
 
 
 def run_benchmark(config: dict) -> dict:
+    family = config.get("experiment_family", "kem")
+    rules = EXPERIMENT_FAMILIES.get(family, EXPERIMENT_FAMILIES["kem"])
+
     iterations = max(5, int(config.get("iterations", 100)))
-    classical_algo = config.get("classical_algo", "RSA-2048")
-    pqc_algo = config.get("pqc_algo", "Kyber-512")
-    operation = config.get("operation", "keygen")
-    file_size_mb = max(1, int(config.get("file_size_mb", 1)))
+    warmup_runs = max(0, int(config.get("warmup_runs", 5)))
+    operation = config.get("operation", rules["operation"])
+    classical_algo = config.get("classical_algo", rules["classical_algos"][0])
+    pqc_algo = config.get("pqc_algo", rules["pqc_algos"][0])
+    _validate_experiment_config(family, classical_algo, pqc_algo, operation)
 
-    classical_profile = CLASSICAL_PROFILES.get(classical_algo, CLASSICAL_PROFILES["RSA-2048"])
-    pqc_profile = PQC_PROFILES.get(pqc_algo, PQC_PROFILES["Kyber-512"])
+    # Mandatory fix: payload is ignored entirely for KEM/signature families.
+    payload_size_mb = None if family in {"kem", "signature"} else max(1, int(config.get("file_size_mb", 1)))
 
-    seed = hash(f"{classical_algo}|{pqc_algo}|{operation}|{iterations}|{file_size_mb}") & 0xFFFFFFFF
-    classical_rng = random.Random(seed)
-    pqc_rng = random.Random(seed ^ 0xABCDEF)
+    if family == "kem":
+        classical_op, pqc_op = _build_kem_ops(pqc_algo)
+    elif family == "signature":
+        classical_op, pqc_op = _build_signature_ops(pqc_algo)
+    elif family == "encryption":
+        classical_op, pqc_op, _ = _build_encryption_ops(payload_size_mb or 1)
+    else:
+        raise ValueError(f"Unsupported experiment_family '{family}'")
 
-    classical = _profile_result(
-        classical_algo,
-        classical_profile,
-        operation,
-        file_size_mb,
-        iterations,
-        classical_rng,
+    classical_samples = _measure(classical_op, warmup_runs=warmup_runs, iterations=iterations)
+    pqc_samples = _measure(pqc_op, warmup_runs=warmup_runs, iterations=iterations)
+
+    classical = _summarize_branch(classical_algo, classical_samples, family, payload_size_mb)
+    pqc = _summarize_branch(pqc_algo, pqc_samples, family, payload_size_mb)
+
+    winner = "pqc" if pqc["median_ms"] < classical["median_ms"] else "classical"
+    speedup_factor = (
+        classical["median_ms"] / pqc["median_ms"] if pqc["median_ms"] > 0 else 0.0
     )
-    pqc = _profile_result(
-        pqc_algo,
-        pqc_profile,
-        operation,
-        file_size_mb,
-        iterations,
-        pqc_rng,
+
+    throughput_ratio = (
+        pqc["throughput_value"] / classical["throughput_value"]
+        if classical["throughput_value"] > 0
+        else 0.0
     )
-
-    speedup_factor = classical["avg_ms"] / pqc["avg_ms"] if pqc["avg_ms"] > 0 else 0.0
-    energy_reduction = 100.0 * (1.0 - (pqc["energy_mj"] / classical["energy_mj"]))
-
-    winner = "pqc" if pqc["avg_ms"] < classical["avg_ms"] else "classical"
-
-    insights = [
-        (
-            "Quantum exposure in classical baseline remains high "
-            f"(risk {classical['quantum_risk_score']}/100)."
-        ),
-        (
-            f"PQC profile improves quantum resilience by "
-            f"{pqc['security_bits_quantum'] - classical['security_bits_quantum']} bits."
-        ),
-        (
-            "Latency variance indicates more stable execution in "
-            f"{'PQC' if pqc['stddev_ms'] < classical['stddev_ms'] else 'classical'} branch."
-        ),
-    ]
 
     return {
         "config": {
+            "experiment_family": family,
             "classical_algo": classical_algo,
             "pqc_algo": pqc_algo,
             "operation": operation,
             "iterations": iterations,
-            "file_size_mb": file_size_mb,
+            "warmup_runs": warmup_runs,
+            "file_size_mb": payload_size_mb,
         },
         "classical": classical,
         "pqc": pqc,
-        "speedup_factor": round(speedup_factor, 2),
-        "energy_reduction_percent": round(energy_reduction, 2),
         "winner": winner,
+        "speedup_factor": round(speedup_factor, 6),
         "comparative": {
-            "latency_gap_ms": round(classical["avg_ms"] - pqc["avg_ms"], 4),
-            "p95_gap_ms": round(classical["p95_ms"] - pqc["p95_ms"], 4),
-            "throughput_ratio": round(
-                pqc["throughput_mbps"] / classical["throughput_mbps"], 2
-            )
-            if classical["throughput_mbps"] > 0
-            else 0.0,
-            "memory_delta_kb": pqc["memory_kb"] - classical["memory_kb"],
+            "latency_gap_ms": round(classical["median_ms"] - pqc["median_ms"], 6),
+            "p95_gap_ms": round(classical["p95_ms"] - pqc["p95_ms"], 6),
+            "throughput_ratio": round(throughput_ratio, 6),
+            "throughput_unit": classical["throughput_unit"],
         },
-        "research_insights": insights,
+        "telemetry_basis": {
+            "quantum_risk_score": "modeled (NIST PQC status + theoretical quantum attack model mapping)",
+            "throughput": (
+                "ops/s for KEM/signature families, MB/s for encryption family"
+            ),
+            "latency": "median/p95/stddev from measured crypto-only operation block",
+        },
+        "methodology": {
+            "machine_specs": {
+                "system": platform.system(),
+                "release": platform.release(),
+                "machine": platform.machine(),
+                "processor": platform.processor() or "unknown",
+                "cpu_count": os.cpu_count(),
+            },
+            "python_version": sys.version.split()[0],
+            "backend_version": "cryptoarena-backend-2026.04",
+            "iterations": iterations,
+            "warmup_runs": warmup_runs,
+            "payload_size_mb": payload_size_mb,
+            "measurement_basis": {
+                "primary_metric": "median_ms",
+                "p95_metric": "p95_ms",
+                "timing_boundary": "start/end perf_counter wraps only crypto_op block; excludes API/logging/serialization/DB",
+            },
+        },
+        "valid_comparison_badges": [
+            "same operation class",
+            "same payload class",
+            "same number of trials",
+        ],
+        "research_insights": [
+            f"Family '{family}' enforces operation-valid comparisons only.",
+            "Median latency is used as the primary performance metric for robustness.",
+            f"Throughput is reported in {classical['throughput_unit']} for this family.",
+        ],
     }

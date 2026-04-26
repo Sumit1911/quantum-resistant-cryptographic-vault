@@ -28,6 +28,7 @@ make test            # quick tests
 make test-all        # unit + integration + security
 make setup-db        # initialize vault.db
 make benchmark       # benchmark report
+make benchmark-harness # reproducible multi-trial baseline benchmark suite
 make keygen          # key generation utility
 ```
 
@@ -60,6 +61,22 @@ python3 scripts/run_project.py streamlit
 - Platform frontend deps: `cd platform/frontend && npm install`
 
 If `liboqs` is not available, install native `liboqs` first, then `liboqs-python`.
+
+## Benchmark Harness
+
+Run a reproducible multi-trial benchmark with baselines:
+
+- `RSA-2048 + AES-GCM + ECDSA`
+- `AES-only`
+- `ML-KEM + ML-DSA + AES-GCM`
+
+Command:
+
+```bash
+python3 scripts/benchmark_harness.py --sizes 1kb,64kb,1mb --trials 20 --seed 1337
+```
+
+This logs median/p95 latency, throughput, overhead metrics, peak memory, CPU usage, and tamper/wrong-key failure rates. Report JSON is written to `reports/benchmark_harness_latest.json`.
 
 ## Streamlit PQC Setup (Windows + macOS)
 

@@ -158,6 +158,7 @@ def login_user(username: str, password: str, db_conn: sqlite3.Connection) -> dic
         kyber_sk = unwrap_private_key(kyber_sk_wrapped, kyber_iv, protection_key)
         dil_sk = unwrap_private_key(dil_sk_wrapped, dil_iv, protection_key)
     except Exception:
+        # Fail closed on unwrap/authentication errors (wrong password/corrupted blob).
         return None
 
     return {

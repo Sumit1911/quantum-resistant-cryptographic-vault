@@ -13,6 +13,7 @@ class VaultItem:
     user_id: int
     item_name: str
     item_type: str
+    metadata_nonce: bytes | None
     ciphertext: bytes | None
     aes_iv: bytes | None
     aes_tag: bytes | None
@@ -41,6 +42,19 @@ def init_db(db_path: str = "vault.db") -> None:
 
     with get_connection(db_path) as conn:
         conn.executescript(schema_path.read_text(encoding="utf-8"))
+        cols = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(vault_items)").fetchall()
+        }
+        if "metadata_nonce" not in cols:
+            conn.execute("ALTER TABLE vault_items ADD COLUMN metadata_nonce BLOB")
+            conn.execute(
+                """
+                UPDATE vault_items
+                SET metadata_nonce = x'00000000000000000000000000000000'
+                WHERE metadata_nonce IS NULL
+                """
+            )
         conn.commit()
 
 
@@ -95,6 +109,7 @@ def store_vault_item(
     user_id: int,
     item_name: str,
     item_type: str,
+    metadata_nonce: bytes,
     ciphertext: bytes,
     aes_iv: bytes,
     aes_tag: bytes,
@@ -108,15 +123,17 @@ def store_vault_item(
         """
         INSERT INTO vault_items (
             user_id, item_name, item_type,
+            metadata_nonce,
             ciphertext, aes_iv, aes_tag,
             kyber_capsule, dilithium_signature,
             original_size, mime_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
             item_name,
             item_type,
+            metadata_nonce,
             ciphertext,
             aes_iv,
             aes_tag,
@@ -135,6 +152,7 @@ def list_vault_items(conn: sqlite3.Connection, user_id: int) -> list[VaultItem]:
     rows = conn.execute(
         """
         SELECT id, user_id, item_name, item_type,
+               metadata_nonce,
                NULL as ciphertext, NULL as aes_iv, NULL as aes_tag,
                NULL as kyber_capsule, NULL as dilithium_signature,
                original_size, mime_type
@@ -153,6 +171,7 @@ def get_vault_item(conn: sqlite3.Connection, item_id: int, user_id: int) -> Vaul
     row = conn.execute(
         """
         SELECT id, user_id, item_name, item_type,
+               metadata_nonce,
                ciphertext, aes_iv, aes_tag,
                kyber_capsule, dilithium_signature,
                original_size, mime_type

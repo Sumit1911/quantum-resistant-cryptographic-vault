@@ -2,14 +2,19 @@ ifeq ($(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe)
 PYTHON := .venv/Scripts/python.exe
 else ifeq ($(wildcard .venv/bin/python),.venv/bin/python)
 PYTHON := .venv/bin/python
+else ifeq ($(wildcard venv/Scripts/python.exe),venv/Scripts/python.exe)
+PYTHON := venv/Scripts/python.exe
+else ifeq ($(wildcard venv/bin/python),venv/bin/python)
+PYTHON := venv/bin/python
 else
-$(error Local virtualenv Python not found. Create .venv and install dependencies first)
+PYTHON := python3
 endif
 
-.PHONY: help setup-db test test-all benchmark keygen run-streamlit run-streamlist run-backend run-frontend run-platform build-frontend
+.PHONY: help setup-db test test-all benchmark benchmark-harness keygen run run-streamlit run-streamlist run-backend run-frontend run-platform build-frontend
 
 help:
 	@echo "Targets:"
+	@echo "  make run            # Alias for run-platform"
 	@echo "  make run-streamlit   # Legacy Streamlit app"
 	@echo "  make run-streamlist  # Alias for run-streamlit (common typo)"
 	@echo "  make run-backend     # Platform FastAPI backend"
@@ -20,6 +25,7 @@ help:
 	@echo "  make build-frontend  # Production frontend build"
 	@echo "  make setup-db        # Initialize SQLite DB"
 	@echo "  make benchmark       # Crypto benchmark script"
+	@echo "  make benchmark-harness # Multi-trial baseline benchmark suite"
 	@echo "  make keygen          # Generate sample keypairs"
 
 setup-db:
@@ -34,8 +40,14 @@ test-all:
 benchmark:
 	$(PYTHON) scripts/benchmark.py
 
+benchmark-harness:
+	$(PYTHON) scripts/benchmark_harness.py
+
 keygen:
 	$(PYTHON) scripts/keygen.py
+
+run:
+	$(MAKE) run-platform
 
 run-streamlit:
 	$(PYTHON) scripts/run_project.py streamlit

@@ -20,6 +20,19 @@ def main() -> None:
     with sqlite3.connect(db_path) as conn:
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.executescript(schema_path.read_text(encoding="utf-8"))
+        cols = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(vault_items)").fetchall()
+        }
+        if "metadata_nonce" not in cols:
+            conn.execute("ALTER TABLE vault_items ADD COLUMN metadata_nonce BLOB")
+            conn.execute(
+                """
+                UPDATE vault_items
+                SET metadata_nonce = x'00000000000000000000000000000000'
+                WHERE metadata_nonce IS NULL
+                """
+            )
         conn.commit()
 
     print(f"Database initialized at: {db_path}")

@@ -82,6 +82,7 @@ def test_store_list_get_delete_vault_item_flow() -> None:
         user_id=user_id,
         item_name="secret.txt",
         item_type="file",
+        metadata_nonce=b"0123456789abcdef",
         ciphertext=b"cipher",
         aes_iv=b"iv-123456789",
         aes_tag=b"1234567890abcdef",
@@ -99,6 +100,7 @@ def test_store_list_get_delete_vault_item_flow() -> None:
 
     item = storage.get_vault_item(conn, item_id, user_id)
     assert item is not None
+    assert item.metadata_nonce == b"0123456789abcdef"
     assert item.ciphertext == b"cipher"
     assert item.aes_iv == b"iv-123456789"
     assert item.dilithium_signature == b"signature"
@@ -119,6 +121,7 @@ def test_get_vault_item_wrong_user_returns_none() -> None:
         user_id=user_a,
         item_name="secret.txt",
         item_type="file",
+        metadata_nonce=b"0123456789abcdef",
         ciphertext=b"cipher",
         aes_iv=b"iv-123456789",
         aes_tag=b"1234567890abcdef",

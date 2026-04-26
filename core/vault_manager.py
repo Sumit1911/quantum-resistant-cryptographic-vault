@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 
+from cryptography.exceptions import InvalidTag
+
 from core import auth, crypto, storage
 
 
@@ -42,7 +44,14 @@ def store_file(session: dict, file_name: str, file_bytes: bytes, mime_type: str)
     finally:
         _zero_bytes(shared_secret_buf)
 
-    payload = crypto.build_signing_payload(ciphertext, capsule, file_name, user_id)
+    metadata_nonce = os.urandom(16)
+    payload = crypto.build_signing_payload(
+        ciphertext,
+        capsule,
+        file_name,
+        user_id,
+        metadata_nonce=metadata_nonce,
+    )
     signature = crypto.dilithium_sign(payload, session["dilithium_sk"])
 
     return storage.store_vault_item(
@@ -50,6 +59,7 @@ def store_file(session: dict, file_name: str, file_bytes: bytes, mime_type: str)
         user_id=user_id,
         item_name=file_name,
         item_type="file",
+        metadata_nonce=metadata_nonce,
         ciphertext=ciphertext,
         aes_iv=iv,
         aes_tag=tag,
@@ -67,6 +77,7 @@ def retrieve_file(session: dict, item_id: int) -> bytes | None:
 
     item = storage.get_vault_item(conn, item_id, user_id)
     if item is None:
+        # Explicit ownership gate: wrong user_id cannot retrieve another user's item.
         return None
 
     payload = crypto.build_signing_payload(
@@ -74,6 +85,7 @@ def retrieve_file(session: dict, item_id: int) -> bytes | None:
         item.kyber_capsule or b"",
         item.item_name,
         user_id,
+        metadata_nonce=item.metadata_nonce or b"",
     )
     is_valid = crypto.dilithium_verify(payload, item.dilithium_signature or b"", session["dilithium_pk"])
     if not is_valid:
@@ -82,12 +94,15 @@ def retrieve_file(session: dict, item_id: int) -> bytes | None:
     shared_secret = crypto.kyber_decapsulate(item.kyber_capsule or b"", session["kyber_sk"])
     shared_secret_buf = bytearray(shared_secret)
     try:
-        return crypto.aes_decrypt(
-            item.ciphertext or b"",
-            item.aes_iv or b"",
-            item.aes_tag or b"",
-            bytes(shared_secret_buf),
-        )
+        try:
+            return crypto.aes_decrypt(
+                item.ciphertext or b"",
+                item.aes_iv or b"",
+                item.aes_tag or b"",
+                bytes(shared_secret_buf),
+            )
+        except InvalidTag as exc:
+            raise IntegrityError("Ciphertext authentication failed") from exc
     finally:
         _zero_bytes(shared_secret_buf)
 

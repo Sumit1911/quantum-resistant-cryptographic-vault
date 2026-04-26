@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { waitRandomSimulationDelay } from '../utils/simulationDelay'
 
 export function useAttack() {
   const [data, setData] = useState<any>(null)
@@ -10,6 +11,7 @@ export function useAttack() {
     setLoading(true)
     setError(null)
     try {
+      await waitRandomSimulationDelay()
       const res = await api.post('/attack/shors', { key_size_bits: keySize })
       setData(res.data)
     } catch {
@@ -23,6 +25,7 @@ export function useAttack() {
     setLoading(true)
     setError(null)
     try {
+      await waitRandomSimulationDelay()
       const res = await api.post('/attack/grovers', { algorithm })
       setData(res.data)
     } catch {
@@ -36,6 +39,7 @@ export function useAttack() {
     setLoading(true)
     setError(null)
     try {
+      await waitRandomSimulationDelay()
       const res = await api.post('/attack/lattice', { dimension })
       setData(res.data)
     } catch {
@@ -49,6 +53,7 @@ export function useAttack() {
     setLoading(true)
     setError(null)
     try {
+      await waitRandomSimulationDelay()
       const res = await api.post('/attack/harvest-risk', {
         years_to_protect: yearsToProtect,
         data_value: dataValue,

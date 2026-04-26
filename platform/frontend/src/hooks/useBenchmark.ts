@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { waitRandomSimulationDelay } from '../utils/simulationDelay'
 
 export type BenchmarkConfig = {
+  experiment_family: 'kem' | 'signature' | 'encryption'
   classical_algo: string
   pqc_algo: string
   operation: string
@@ -18,10 +20,12 @@ export function useBenchmark() {
     setLoading(true)
     setError(null)
     try {
+      await waitRandomSimulationDelay()
       const res = await api.post('/benchmark/run', config)
       setData(res.data)
-    } catch {
-      setError('Benchmark run failed. Check backend status and try again.')
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail
+      setError(detail || 'Benchmark run failed. Check backend status and try again.')
     } finally {
       setLoading(false)
     }

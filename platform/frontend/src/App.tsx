@@ -1,15 +1,20 @@
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 
 import AttackLab from './pages/AttackLab'
 import Arena from './pages/Arena'
-import Dashboard from './pages/Dashboard'
 import Vault from './pages/Vault'
 
-function TopNav() {
+function TopNav({
+  theme,
+  onToggleTheme,
+}: {
+  theme: 'current' | 'light'
+  onToggleTheme: () => void
+}) {
   const location = useLocation()
 
   const links = [
-    { to: '/', label: 'Overview' },
     { to: '/arena', label: 'Arena' },
     { to: '/attack', label: 'Attack Lab' },
     { to: '/vault', label: 'Vault Lens' },
@@ -18,8 +23,8 @@ function TopNav() {
   return (
     <header className="topnav">
       <div className="brand-wrap">
-        <p className="brand-kicker">Post-Quantum Research Platform</p>
-        <h1 className="brand">CryptoArena</h1>
+        <p className="brand-kicker">Research Platform</p>
+        <h1 className="brand">Post Quantum Cryptographic Vault</h1>
       </div>
       <nav className="topnav-links">
         {links.map((link) => (
@@ -27,24 +32,38 @@ function TopNav() {
             {link.label}
           </Link>
         ))}
+        <button className="theme-toggle" onClick={onToggleTheme} type="button">
+          {theme === 'current' ? 'Light Mode' : 'Crypto Mode'}
+        </button>
       </nav>
     </header>
   )
 }
 
 function App() {
+  const [theme, setTheme] = useState<'current' | 'light'>(() => {
+    const stored = localStorage.getItem('cryptoarena-theme')
+    return stored === 'light' ? 'light' : 'current'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('cryptoarena-theme', theme)
+  }, [theme])
+
   return (
     <div className="app-shell">
-      <div className="bg-orb orb-a" />
-      <div className="bg-orb orb-b" />
-      <TopNav />
+      <TopNav
+        theme={theme}
+        onToggleTheme={() => setTheme((prev) => (prev === 'current' ? 'light' : 'current'))}
+      />
       <main>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<Navigate to="/arena" replace />} />
           <Route path="/arena" element={<Arena />} />
           <Route path="/attack" element={<AttackLab />} />
           <Route path="/vault" element={<Vault />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/arena" replace />} />
         </Routes>
       </main>
     </div>
