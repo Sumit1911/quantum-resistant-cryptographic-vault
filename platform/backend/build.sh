@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# Install liboqs to a local directory (no sudo needed)
 LIBOQS_INSTALL="$HOME/liboqs-install"
 
 git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs
@@ -14,9 +13,5 @@ cmake -DBUILD_SHARED_LIBS=ON \
 make -j$(nproc)
 make install
 
-# Tell the system where to find the shared library
-export LD_LIBRARY_PATH="$LIBOQS_INSTALL/lib:$LIBOQS_INSTALL/lib64:$LD_LIBRARY_PATH"
-
-# Now install Python deps
-cd /opt/render/project/src
-pip install -r requirements.txt
+# Install into the VENV that Render uses at runtime
+/opt/render/project/src/.venv/bin/pip install -r /opt/render/project/src/platform/backend/requirements.txt
