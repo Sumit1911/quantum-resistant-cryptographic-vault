@@ -187,16 +187,29 @@ export default function Arena() {
               value={String(data.winner).toUpperCase()}
               hint={`Speedup ${data.speedup_factor}x`}
               tone={data.winner === 'pqc' ? 'good' : 'warn'}
+              formula={[
+                'winner = "pqc" if pqc_median_ms < classical_median_ms else "classical"',
+                `current = ${data.pqc.median_ms} ms vs ${data.classical.median_ms} ms`,
+              ]}
             />
             <MetricCard
               label="Median Latency Gap"
               value={`${data.comparative.latency_gap_ms} ms`}
               hint={`P95 gap ${data.comparative.p95_gap_ms} ms`}
+              formula={[
+                'latency_gap_ms = classical_median_ms - pqc_median_ms',
+                `${data.classical.median_ms} - ${data.pqc.median_ms} = ${data.comparative.latency_gap_ms} ms`,
+                'positive value means PQC is faster on median latency',
+              ]}
             />
             <MetricCard
               label="Throughput Ratio"
               value={`${data.comparative.throughput_ratio}x`}
               hint={`Unit ${data.comparative.throughput_unit}`}
+              formula={[
+                'throughput_ratio = pqc_throughput / classical_throughput',
+                `${data.pqc.throughput_value} / ${data.classical.throughput_value} = ${data.comparative.throughput_ratio}x`,
+              ]}
             />
           </div>
 
@@ -207,6 +220,17 @@ export default function Arena() {
               label={`${data.classical.algo} Throughput`}
               value={`${data.classical.throughput_value} ${data.classical.throughput_unit}`}
               hint={`${data.pqc.algo}: ${data.pqc.throughput_value} ${data.pqc.throughput_unit}`}
+              formula={
+                data.classical.throughput_unit === 'MB/s'
+                  ? [
+                      'throughput_MBps = payload_size_mb / (median_ms / 1000)',
+                      `${data.config.file_size_mb} / (${data.classical.median_ms} / 1000) = ${data.classical.throughput_value} MB/s`,
+                    ]
+                  : [
+                      'ops_per_sec = 1000 / median_ms',
+                      `1000 / ${data.classical.median_ms} = ${data.classical.throughput_value} ops/s`,
+                    ]
+              }
             />
           </div>
 
@@ -215,16 +239,38 @@ export default function Arena() {
               label={`${data.classical.algo} Stats`}
               value={`med ${data.classical.median_ms} ms`}
               hint={`p95 ${data.classical.p95_ms} ms, stddev ${data.classical.stddev_ms} ms`}
+              formula={[
+                'median_ms = median(all measured iteration latencies)',
+                'p95_ms = sorted_latencies[floor(0.95 * n) - 1]',
+                'stddev_ms = population standard deviation of measured latencies',
+              ]}
             />
             <MetricCard
               label={`${data.pqc.algo} Stats`}
               value={`med ${data.pqc.median_ms} ms`}
               hint={`p95 ${data.pqc.p95_ms} ms, stddev ${data.pqc.stddev_ms} ms`}
+              formula={[
+                'median_ms = median(all measured iteration latencies)',
+                'p95_ms = sorted_latencies[floor(0.95 * n) - 1]',
+                'stddev_ms = population standard deviation of measured latencies',
+              ]}
             />
             <MetricCard
               label="Overhead"
-              value={`CT +${data.classical.ciphertext_overhead_bytes}B`}
-              hint={`PQC cap/sig +${data.pqc.capsule_signature_overhead_bytes}B`}
+              value={
+                <>
+                  <span>C +{data.classical.ciphertext_overhead_bytes}B</span>
+                  <br />
+                  <span>P +{data.pqc.ciphertext_overhead_bytes + data.pqc.capsule_signature_overhead_bytes}B</span>
+                </>
+              }
+              hint={`Classical wrap/sig +${data.classical.capsule_signature_overhead_bytes}B · PQC cap/sig +${data.pqc.capsule_signature_overhead_bytes}B`}
+              formula={[
+                'classical_total_overhead = ciphertext_overhead_bytes + capsule_signature_overhead_bytes',
+                `${data.classical.ciphertext_overhead_bytes} + ${data.classical.capsule_signature_overhead_bytes} = ${data.classical.ciphertext_overhead_bytes + data.classical.capsule_signature_overhead_bytes} B`,
+                'pqc_total_overhead = ciphertext_overhead_bytes + capsule_signature_overhead_bytes',
+                `${data.pqc.ciphertext_overhead_bytes} + ${data.pqc.capsule_signature_overhead_bytes} = ${data.pqc.ciphertext_overhead_bytes + data.pqc.capsule_signature_overhead_bytes} B`,
+              ]}
             />
           </div>
 

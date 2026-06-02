@@ -264,10 +264,25 @@ textarea {
 }
 
 .metric-card {
+  position: relative;
   background: linear-gradient(160deg, color-mix(in srgb, var(--panel-elev) 85%, #fff 8%), var(--panel));
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px;
+  overflow: visible;
+}
+
+.metric-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.metric-formula-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .metric-label {
@@ -289,6 +304,60 @@ textarea {
   margin: 0;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.metric-formula-chip {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--panel-elev) 92%, transparent);
+  color: var(--accent);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: help;
+}
+
+.metric-formula-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 4;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: 12px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--panel-elev) 96%, #081218 4%);
+  box-shadow: 0 14px 28px rgba(2, 10, 15, 0.32);
+  min-width: min(340px, calc(100vw - 48px));
+}
+
+.metric-formula-wrap:hover .metric-formula-popover,
+.metric-formula-wrap:focus-within .metric-formula-popover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.metric-formula-title {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric-formula-line {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .tone-good {
@@ -513,5 +582,14 @@ textarea {
 
   .race-line {
     grid-template-columns: 1fr;
+  }
+
+  .metric-formula-popover {
+    position: static;
+    margin-top: 10px;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    box-shadow: none;
   }
 }

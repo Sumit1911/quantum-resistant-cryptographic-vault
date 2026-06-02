@@ -43,6 +43,64 @@ export default function AttackLab() {
     runLattice(dimension)
   }
 
+  const verdictFormula =
+    !data
+      ? undefined
+      : data.mode === 'shors'
+        ? [
+            'if break_ratio_model >= 1e12 -> highly_exposed',
+            'else if break_ratio_model >= 1e6 -> degraded',
+            'else -> not_broken_in_model',
+            `current break_ratio_model = ${Number(data.break_ratio_model).toExponential(2)}`,
+          ]
+        : data.mode === 'grovers'
+          ? [
+              'if post_grover_bits < 128 -> weakened',
+              'else -> resilient_in_model',
+              `current post_grover_bits = ${data.post_grover_bits}`,
+            ]
+          : data.mode === 'lattice'
+            ? [
+                'if security_band_model >= 192 -> resilient_in_model',
+                'else if security_band_model >= 128 -> degraded',
+                'else -> highly_exposed',
+                `current security_band_model = ${data.security_band_model}`,
+              ]
+            : [
+                'if risk_horizon_percent >= 70 -> migration_advised',
+                'else if risk_horizon_percent >= 45 -> weakened',
+                'else -> resilient_in_model',
+                `current risk_horizon_percent = ${data.risk_horizon_percent}%`,
+              ]
+
+  const primaryMetricFormula =
+    !data
+      ? undefined
+      : data.mode === 'shors'
+        ? [
+            'classical_ops = 2^(key_bits / 18)',
+            'quantum_ops = 2^((log2(key_bits)) * 2.5)',
+            'break_ratio_model = classical_ops / quantum_ops',
+            `${data.snapshot.classical_notation} / ${data.snapshot.quantum_notation} = ${Number(data.break_ratio_model).toExponential(2)}`,
+          ]
+        : data.mode === 'grovers'
+          ? [
+              'post_grover_bits = floor(classical_bits / 2)',
+              'bit_reduction_percent = 100 * (1 - post_grover_bits / classical_bits)',
+              `100 * (1 - ${data.post_grover_bits} / ${data.classical_bits}) = ${data.effective_reduction_percent}%`,
+            ]
+          : data.mode === 'lattice'
+            ? [
+                'bkz_proxy = max(180, floor(0.76 * dimension))',
+                'security band = 128 if n <= 512, 192 if n <= 768, else 256',
+                `dimension ${data.dimension} -> bkz_proxy ${data.bkz_block_size_proxy} -> security band ${data.security_band_model}`,
+              ]
+            : [
+                'baseline = 100 / (1 + exp(-0.35 * (year - 9)))',
+                'adjusted_risk = min(100, baseline * value_multiplier)',
+                `horizon risk = ${data.risk_horizon_percent}% using value "${data.data_value}"`,
+              ]
+
   return (
     <section className="page-grid">
       <article className="panel">
@@ -145,6 +203,7 @@ export default function AttackLab() {
               value={String(data.verdict).replaceAll('_', ' ').toUpperCase()}
               hint={data.mode === 'grovers' ? data.recommendation : data.explanation || data.summary}
               tone={String(data.verdict).includes('exposed') || String(data.verdict).includes('weakened') || String(data.verdict).includes('advised') ? 'warn' : 'good'}
+              formula={verdictFormula}
             />
             {data.mode === 'shors' && (
               <MetricCard
@@ -152,6 +211,7 @@ export default function AttackLab() {
                 value={`${Number(data.break_ratio_model).toExponential(2)}`}
                 hint={`${data.snapshot.classical_notation} vs ${data.snapshot.quantum_notation}`}
                 tone="warn"
+                formula={primaryMetricFormula}
               />
             )}
             {data.mode === 'grovers' && (
@@ -159,6 +219,7 @@ export default function AttackLab() {
                 label="Bit Reduction"
                 value={`${data.effective_reduction_percent}%`}
                 hint={`Classical ${data.classical_bits} -> Quantum ${data.post_grover_bits}`}
+                formula={primaryMetricFormula}
               />
             )}
             {data.mode === 'lattice' && (
@@ -167,6 +228,7 @@ export default function AttackLab() {
                 value={`${data.security_band_model} bits`}
                 hint={`BKZ proxy ${data.bkz_block_size_proxy}`}
                 tone="good"
+                formula={primaryMetricFormula}
               />
             )}
             {data.mode === 'harvest' && (
@@ -175,6 +237,7 @@ export default function AttackLab() {
                 value={`${data.risk_horizon_percent}%`}
                 hint={`Today ${data.risk_today_percent}%`}
                 tone={data.risk_horizon_percent >= 70 ? 'warn' : 'good'}
+                formula={primaryMetricFormula}
               />
             )}
           </div>
