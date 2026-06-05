@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import attack, auth, benchmark, vault
 
 
-app = FastAPI(title="Quantum Vault Platform API")
+app = FastAPI(title="Quantum-Resistant Cryptographic Vault")
 
 app.add_middleware(
     CORSMiddleware,

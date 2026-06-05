@@ -1,4 +1,4 @@
-"""Streamlit entrypoint for the Quantum-Resistant Vault application."""
+"""Streamlit entrypoint for the Quantum-Resistant Cryptographic Vault application."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _logout() -> None:
 
 def main() -> None:
     load_dotenv()
-    st.set_page_config(page_title="Quantum Vault", page_icon="🔐", layout="wide")
+    st.set_page_config(page_title="Quantum-Resistant Cryptographic Vault", page_icon="🔐", layout="wide")
     apply_theme()
     _init_state()
 

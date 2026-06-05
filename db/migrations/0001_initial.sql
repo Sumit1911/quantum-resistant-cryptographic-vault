@@ -1,4 +1,4 @@
--- Initial baseline schema migration for Quantum Vault.
+-- Initial baseline schema migration for Quantum-Resistant Cryptographic Vault.
 -- Mirrors the current schema in db/schema.sql.
 
 CREATE TABLE IF NOT EXISTS users (

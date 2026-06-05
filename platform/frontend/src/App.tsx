@@ -24,7 +24,7 @@ function TopNav({
     <header className="topnav">
       <div className="brand-wrap">
         <p className="brand-kicker">Research Platform</p>
-        <h1 className="brand">Post Quantum Cryptographic Vault</h1>
+        <h1 className="brand">Quantum-Resistant Cryptographic Vault</h1>
       </div>
       <nav className="topnav-links">
         {links.map((link) => (

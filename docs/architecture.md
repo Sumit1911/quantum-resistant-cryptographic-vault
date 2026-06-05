@@ -1,4 +1,4 @@
-# Quantum Vault Architecture
+# Quantum-Resistant Cryptographic Vault Architecture
 
 ## System Overview
 

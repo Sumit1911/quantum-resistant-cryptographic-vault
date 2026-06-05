@@ -1,4 +1,4 @@
-# Quantum Vault Architecture
+# Quantum-Resistant Cryptographic Vault Architecture
 ## Current Codebase Reference (Updated: April 12, 2026)
 
 ---
